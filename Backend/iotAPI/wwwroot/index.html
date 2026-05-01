@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Sensör Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body { background-color: #f0f2f5; }
+        .card { box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: none; margin-bottom: 20px; }
+        .sensor-card { transition: transform 0.2s; }
+        .sensor-card:hover { transform: translateY(-4px); }
+        .cursor-pointer { cursor: pointer; }
+        .ring-selected { outline: 3px solid #0d6efd !important; outline-offset: 2px; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .pulse { animation: pulse 1.5s infinite; }
+        .refresh-btn { position: fixed; bottom: 30px; right: 30px; z-index: 1000; width: 56px; height: 56px; }
+        .stat-value { font-size: 1.6rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand fw-bold">
+                <i class="bi bi-broadcast-pin text-success"></i> IoT Sensör Dashboard
+            </span>
+            <span class="text-white-50 small" id="lastUpdate">--</span>
+        </div>
+    </nav>
+
+    <div class="container-fluid p-4">
+
+        <!-- Cihaz Kartları -->
+        <div class="row" id="deviceCards">
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-primary"></div>
+            </div>
+        </div>
+
+        <!-- Grafikler -->
+        <div class="row mt-2">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header fw-semibold">
+                        <i class="bi bi-thermometer-half text-danger"></i> Sıcaklık
+                        <span class="badge bg-secondary ms-1" id="chartTitle"></span>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="tempChart" height="150"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header fw-semibold">
+                        <i class="bi bi-droplet-fill text-info"></i> Nem
+                    </div>
+                    <div class="card-body">
+                        <canvas id="humidityChart" height="150"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header fw-semibold">
+                        <i class="bi bi-wind text-warning"></i> Hava Kalitesi ADC
+                    </div>
+                    <div class="card-body">
+                        <canvas id="airChart" height="150"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alert Gecmisi -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card border-danger">
+                    <div class="card-header bg-danger text-white fw-semibold">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Alarm Geçmişi
+                        <span class="badge bg-white text-danger ms-2" id="alertCount">0</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Cihaz</th>
+                                        <th>Tarih/Saat</th>
+                                        <th>Sicaklik</th>
+                                        <th>Nem</th>
+                                        <th>Hava Kalitesi</th>
+                                        <th>Hareket</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="alertHistory">
+                                    <tr><td colspan="6" class="text-center py-3 text-muted">Yukleniyor...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <button class="btn btn-dark rounded-circle refresh-btn shadow" onclick="loadAll()" title="Yenile">
+        <i class="bi bi-arrow-clockwise fs-5"></i>
+    </button>
+
+    <script>
+        const API = 'http://localhost:5011/api/sensordata';
+        let tempChart, humidityChart, airChart;
+        let selectedDeviceId = null;
+
+        async function loadAll() {
+            try {
+                const [latestRes, alertsRes] = await Promise.all([
+                    fetch(`${API}/latest`),
+                    fetch(`${API}/alerts?limit=50`)
+                ]);
+
+                const latest = await latestRes.json();
+                const allAlerts = await alertsRes.json();
+
+                renderDeviceCards(latest);
+
+                if (latest.length > 0) {
+                    // Seçili cihaz yoksa ilkini seç
+                    if (!selectedDeviceId) {
+                        selectedDeviceId = latest[0].deviceId;
+                        document.getElementById('chartTitle').textContent = selectedDeviceId;
+                    }
+                    await loadCharts(selectedDeviceId);
+                    const filtered = allAlerts.filter(a => a.deviceId === selectedDeviceId);
+                    renderAlerts(filtered);
+                }
+
+                document.getElementById('lastUpdate').textContent =
+                    'Son Güncelleme: ' + new Date().toLocaleString('tr-TR');
+
+            } catch (err) {
+                console.error('Veri yuklenemedi:', err);
+            }
+        }
+
+        async function selectDevice(deviceId) {
+            selectedDeviceId = deviceId;
+            // Kart seçim stilini güncelle
+            document.querySelectorAll('[id^="device-"]').forEach(el => {
+                el.querySelector('.card').classList.remove('ring-selected');
+            });
+            const selected = document.getElementById('device-' + deviceId);
+            if (selected) selected.querySelector('.card').classList.add('ring-selected');
+
+            await loadCharts(deviceId);
+
+            const alertsRes = await fetch(`${API}/alerts?limit=50`);
+            const allAlerts = await alertsRes.json();
+            renderAlerts(allAlerts.filter(a => a.deviceId === deviceId));
+
+            document.getElementById('chartTitle').textContent = deviceId;
+
+            document.getElementById('chartTitle').textContent = deviceId;
+        }
+
+        function renderDeviceCards(devices) {
+            const container = document.getElementById('deviceCards');
+            if (!devices.length) {
+                container.innerHTML = '<div class="col-12"><div class="alert alert-warning">Henüz veri yok.</div></div>';
+                return;
+            }
+
+            // İlk yüklemede spinner'ı temizle
+            const spinner = container.querySelector('.spinner-border');
+            if (spinner) spinner.closest('.col-12')?.remove();
+
+            devices.forEach(d => {
+                const cardId = 'device-' + d.deviceId;
+                let wrapper = document.getElementById(cardId);
+
+                if (!wrapper) {
+                    // İlk kez oluştur
+                    wrapper = document.createElement('div');
+                    wrapper.className = 'col-md-6 col-lg-4 col-xl-3';
+                    wrapper.id = cardId;
+                    container.appendChild(wrapper);
+                }
+
+                wrapper.innerHTML = `
+                    <div class="card sensor-card cursor-pointer ${d.deviceId === selectedDeviceId ? 'ring-selected' : ''} ${d.alert ? 'border-danger border-2' : ''}" onclick="selectDevice('${d.deviceId}')">
+                        <div class="card-header d-flex justify-content-between align-items-center
+                            ${d.alert ? 'bg-danger text-white' : 'bg-dark text-white'}">
+                            <span><i class="bi bi-cpu-fill"></i> ${d.deviceId}</span>
+                            ${d.alert ? '<span class="badge bg-warning text-dark pulse">ALARM</span>' : '<span class="badge bg-success">Normal</span>'}
+                        </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-6 mb-3">
+                                    <div class="text-danger stat-value">${d.temperature.toFixed(1)}°C</div>
+                                    <small class="text-muted">Sicaklik</small>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <div class="text-info stat-value">${d.humidity.toFixed(1)}%</div>
+                                    <small class="text-muted">Nem</small>
+                                </div>
+                                <div class="col-6">
+                                    <div class="text-warning stat-value">${d.airQualityAdc}</div>
+                                    <small class="text-muted">Hava ADC</small>
+                                </div>
+                                <div class="col-6">
+                                    <div class="stat-value ${d.motionDetected ? 'text-success' : 'text-secondary'}">
+                                        <i class="bi bi-${d.motionDetected ? 'person-walking' : 'slash-circle'}"></i>
+                                    </div>
+                                    <small class="text-muted">Hareket</small>
+                                </div>
+                            </div>
+                            <hr class="my-2">
+                            <small class="text-muted">
+                                <i class="bi bi-clock"></i>
+                                ${new Date(d.timestamp).toLocaleString('tr-TR')}
+                            </small>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function renderAlerts(alerts) {
+            document.getElementById('alertCount').textContent = alerts.length;
+            const tbody = document.getElementById('alertHistory');
+
+            if (!alerts.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">Henuz alert kaydi yok</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = alerts.map(a => `
+                <tr class="table-danger">
+                    <td><span class="badge bg-danger">${a.deviceId}</span></td>
+                    <td>${new Date(a.timestamp).toLocaleString('tr-TR')}</td>
+                    <td><strong>${a.temperature.toFixed(1)}°C</strong></td>
+                    <td>${a.humidity.toFixed(1)}%</td>
+                    <td>${a.airQualityAdc}</td>
+                    <td>
+                        ${a.motionDetected
+                            ? '<i class="bi bi-check-circle-fill text-success"></i> Var'
+                            : '<i class="bi bi-x-circle text-secondary"></i> Yok'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadCharts(deviceId) {
+            try {
+                const res = await fetch(`${API}/recent/${deviceId}?limit=10`);
+                const records = (await res.json()).reverse();
+
+                const labels    = records.map(r => new Date(r.timestamp).toLocaleTimeString('tr-TR'));
+                const temps     = records.map(r => r.temperature);
+                const humids    = records.map(r => r.humidity);
+                const airValues = records.map(r => r.airQualityAdc);
+
+                if (!tempChart) {
+                    tempChart = createLineChart('tempChart', labels, temps, 'Sicaklik (°C)', 'rgb(220,53,69)', 'rgba(220,53,69,0.1)', 0, 50);
+                } else {
+                    updateChart(tempChart, labels, temps);
+                }
+
+                if (!humidityChart) {
+                    humidityChart = createLineChart('humidityChart', labels, humids, 'Nem (%)', 'rgb(13,202,240)', 'rgba(13,202,240,0.1)', 0, 100);
+                } else {
+                    updateChart(humidityChart, labels, humids);
+                }
+
+                if (!airChart) {
+                    airChart = createBarChart('airChart', labels, airValues, 'Hava Kalitesi ADC');
+                } else {
+                    updateBarChart(airChart, labels, airValues);
+                }
+
+            } catch (err) {
+                console.error('Grafik yuklenemedi:', err);
+            }
+        }
+
+        function createLineChart(id, labels, data, label, borderColor, bgColor, yMin, yMax) {
+            return new Chart(document.getElementById(id), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{ label, data, borderColor, backgroundColor: bgColor, tension: 0.4, fill: true, pointRadius: 4 }]
+                },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { min: yMin, max: yMax } }
+                }
+            });
+        }
+
+        function createBarChart(id, labels, data, label) {
+            return new Chart(document.getElementById(id), {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label,
+                        data,
+                        backgroundColor: data.map(v => v > 2000 ? 'rgba(220,53,69,0.6)' : 'rgba(255,193,7,0.6)'),
+                        borderColor:     data.map(v => v > 2000 ? 'rgb(220,53,69)'      : 'rgb(255,193,7)'),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { min: 0, max: 4095 } }
+                }
+            });
+        }
+
+        function updateChart(chart, labels, data) {
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = data;
+            chart.update('none');
+        }
+
+        function updateBarChart(chart, labels, data) {
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = data;
+            chart.data.datasets[0].backgroundColor = data.map(v => v > 2000 ? 'rgba(220,53,69,0.6)' : 'rgba(255,193,7,0.6)');
+            chart.data.datasets[0].borderColor = data.map(v => v > 2000 ? 'rgb(220,53,69)' : 'rgb(255,193,7)');
+            chart.update('none');
+        }
+
+        // Ilk yukleme
+        loadAll();
+
+        // Her 3 saniyede otomatik yenile
+        setInterval(loadAll, 3000);
+    </script>
+</body>
+</html>
