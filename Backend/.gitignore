@@ -1,0 +1,66 @@
+## .NET / C# Standard .gitignore
+
+# Build outputs
+bin/
+obj/
+
+# NuGet packages
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!**/packages/repositories.config
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Rider
+.idea/
+
+# MSBuild
+msbuildtemp/
+
+# Publish output
+publish/
+**/publish/
+
+# Entity Framework migrations (optional - remove if you want to track them)
+# Migrations/
+
+# dotnet tool manifests
+.config/dotnet-tools.json
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Logs
+*.log
+logs/
+
+# Runtime
+*.runtimeconfig.json
+*.deps.json
+
+# App secrets (never commit!)
+appsettings.Production.json
+secrets.json
+*.pfx
+*.p12
+
+# Environment files
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
