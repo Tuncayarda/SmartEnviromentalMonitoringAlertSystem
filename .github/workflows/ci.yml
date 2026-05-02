@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend — Build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .NET SDK kurulumu
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Bağımlılıkları yükle
+        run: dotnet restore
+        working-directory: Backend/iotAPI
+
+      - name: Derle
+        run: dotnet build --no-restore --configuration Release
+        working-directory: Backend/iotAPI
+
+  embedded:
+    name: Embedded — Build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python kurulumu
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: PlatformIO kurulumu
+        run: pip install platformio
+
+      - name: .env oluştur
+        run: copy .env.example .env
+        working-directory: Embedded
+
+      - name: Derle
+        run: pio run
+        working-directory: Embedded
+
