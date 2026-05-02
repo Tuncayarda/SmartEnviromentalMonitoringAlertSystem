@@ -15,7 +15,7 @@ Gerçek zamanlı çevre izleme sistemi. ESP32 tabanlı donanım sensör verileri
 | Gömülü     | ESP32, Arduino/PlatformIO, C++       |
 | Backend    | .NET 10, ASP.NET Core, EF Core       |
 | Veritabanı | PostgreSQL                           |
-| Mesajlaşma | MQTT (Mosquitto veya başka broker)   |
+| Mesajlaşma | MQTT (EMQX Cloud — TLS/8883)         |
 
 ---
 
@@ -27,7 +27,8 @@ Gerçek zamanlı çevre izleme sistemi. ESP32 tabanlı donanım sensör verileri
 |------|---------------|---------|
 | .NET SDK | 10.0 | https://dotnet.microsoft.com/download |
 | PostgreSQL | 14+ | https://www.postgresql.org/download |
-| MQTT Broker (Mosquitto) | 2.0+ | https://mosquitto.org/download |
+
+> MQTT broker olarak [EMQX Cloud](https://www.emqx.com/en/cloud) kullanılmaktadır. Herhangi bir broker kurulumuna gerek yoktur; yalnızca `.env` dosyasındaki bağlantı bilgilerinin doğru girilmesi yeterlidir.
 
 ### Embedded (ESP32 Firmware)
 
@@ -53,7 +54,12 @@ cd SmartEnviromentalMonitoringAlertSystem
 
 ### 2. MQTT Broker
 
-> **Not:** Bu proje [Eclipse Mosquitto](https://mosquitto.org) broker ile geliştirildi ve test edildi. Mosquitto'nun servis olarak kurulu ve çalışır durumda olduğu varsayılır (`localhost:1883`). Farklı bir broker kullanılıyorsa sonraki adımlarda ilgili host ve port bilgilerinin güncellenmesi gerekir.
+Bu proje MQTT broker olarak [EMQX Cloud](https://www.emqx.com/en/cloud) kullanmaktadır. Kurulum gerektirmez; backend ve ESP32 `.env` dosyalarına broker bilgileri girilmesi yeterlidir.
+
+EMQX Cloud'da yeni bir deployment oluşturduktan sonra:
+- **Host:** Deployment sayfasındaki bağlantı adresi
+- **Port:** `8883` (TLS zorunludur)
+- **Kullanıcı adı / şifre:** EMQX Cloud konsolundan oluşturulan kimlik bilgileri
 
 ---
 
@@ -72,11 +78,14 @@ cp .env.example .env
 # PostgreSQL bağlantısı
 ConnectionStrings__PostgreSQL=Host=localhost;Port=5432;Database=iotdb;Username=postgres;Password=sifreniz
 
-# MQTT broker
-MqttConfiguration__Host=localhost
-MqttConfiguration__Port=1883
+# MQTT broker (EMQX Cloud)
+MqttConfiguration__Host=your-cluster.emqxsl.com
+MqttConfiguration__Port=8883
 MqttConfiguration__ClientId=iotAPI
 MqttConfiguration__Topic=sensors
+MqttConfiguration__UseTls=true
+MqttConfiguration__Username=kullanici_adiniz
+MqttConfiguration__Password=sifreniz
 ```
 
 #### 3.2 Bağımlılıkları yükle, derle ve çalıştır
@@ -106,15 +115,15 @@ cp .env.example .env
 DEVICE_ID=ESP_001
 WIFI_SSID=ağ_adın
 WIFI_PASSWORD=şifren
-MQTT_BROKER=192.168.1.100   # Backend'in çalıştığı makinenin IP'si
-MQTT_PORT=1883
+MQTT_BROKER=your-cluster.emqxsl.com
+MQTT_PORT=8883
 MQTT_CLIENT_ID=001
 MQTT_TOPIC=sensors
-MQTT_USER=
-MQTT_PASS=
+MQTT_USER=kullanici_adiniz
+MQTT_PASS=sifreniz
 ```
 
-> `MQTT_BROKER` olarak Backend'in çalıştığı makinenin yerel ağ IP'si girilmelidir (ör. `192.168.1.x`). `localhost` ESP32'den erişilemez.
+> `MQTT_BROKER`, `MQTT_USER` ve `MQTT_PASS` değerleri EMQX Cloud konsolundan alınmalıdır. ESP32 broker'a TLS (`WiFiClientSecure`) üzerinden bağlanır; sertifika doğrulaması yapılmaz (`setInsecure`).
 
 #### 4.2 Firmware yüklenmesi
 
@@ -200,7 +209,7 @@ Bağlantı koptuğunda paketler bellekte (`MQTT_BUFFER_SIZE = 30`) tutulur, bağ
 
 **Genel Akış**
 
-DHT11, PIR ve MQ135 sensörlerinden okunan veriler ESP32 üzerinde işlenir. FreeRTOS'un dual-core yapısı sayesinde Core 0 sensör okuma ve uyarı çıkışlarını (LED/Buzzer) yönetirken Core 1 her saniye JSON paketini Mosquitto broker'a publish eder. Backend'deki `MqttListenerService` bu paketi alır, `MqttMessageHandler` aracılığıyla ayrıştırır ve `SensorDataRepository` ile PostgreSQL'e yazar. Dışarıya ise `/api/sensordata/latest`, `/api/sensordata/recent/{deviceId}` ve `/api/sensordata/alerts` endpoint'leri üzerinden REST API olarak sunulur.
+DHT11, PIR ve MQ135 sensörlerinden okunan veriler ESP32 üzerinde işlenir. FreeRTOS'un dual-core yapısı sayesinde Core 0 sensör okuma ve uyarı çıkışlarını (LED/Buzzer) yönetirken Core 1 her saniye JSON paketini EMQX Cloud broker'a TLS üzerinden publish eder. Backend'deki `MqttListenerService` bu paketi alır, `MqttMessageHandler` aracılığıyla ayrıştırır ve `SensorDataRepository` ile PostgreSQL'e yazar. Dışarıya ise `/api/sensordata/latest`, `/api/sensordata/recent/{deviceId}` ve `/api/sensordata/alerts` endpoint'leri üzerinden REST API olarak sunulur.
 
 **Tercih gerekçeleri:**
 
