@@ -3,10 +3,11 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 
-static WiFiClient   wifiClient;
-static PubSubClient mqtt(wifiClient);
+static WiFiClientSecure wifiClient;
+static PubSubClient     mqtt(wifiClient);
 
 // Bağlantı yokken gönderilemeyen paketler burada bekler
 struct BufferedPacket {
@@ -69,10 +70,10 @@ bool mqtt_isConnected() {
 
 // Broker adresini ve buffer boyutunu ayarlar, başka bir şey yapmaz.
 void mqtt_init() {
+    wifiClient.setInsecure();  // Sertifika doğrulaması yapma (self-signed / ortak CA olmayan brokerlar için)
     mqtt.setServer(MQTT_BROKER, MQTT_PORT);
     mqtt.setBufferSize(512);
-    mqtt.setSocketTimeout(3);
-    wifiClient.setNoDelay(true);  // Nagle algoritmasını kapat — küçük paketlerde gecikmeyi önler
+    mqtt.setSocketTimeout(5);
 }
 
 // Bağlantı kopmuşsa yeniden bağlanmayı dener.

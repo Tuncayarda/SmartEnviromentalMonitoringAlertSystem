@@ -34,12 +34,19 @@ public sealed class MqttListenerService : BackgroundService
         var factory = new MqttFactory();
         _mqttClient = factory.CreateMqttClient();
 
-        _mqttOptions = new MqttClientOptionsBuilder()
+        var optionsBuilder = new MqttClientOptionsBuilder()
             .WithTcpServer(_config.Host, _config.Port)
             .WithClientId(_config.ClientId)
             .WithKeepAlivePeriod(TimeSpan.FromSeconds(15))
-            .WithCleanSession()
-            .Build();
+            .WithCleanSession();
+
+        if (_config.UseTls)
+            optionsBuilder = optionsBuilder.WithTlsOptions(o => o.UseTls());
+
+        if (!string.IsNullOrEmpty(_config.Username))
+            optionsBuilder = optionsBuilder.WithCredentials(_config.Username, _config.Password);
+
+        _mqttOptions = optionsBuilder.Build();
 
         _mqttClient.ApplicationMessageReceivedAsync += OnMessageReceivedAsync;
         _mqttClient.ConnectedAsync += OnConnectedAsync;
@@ -182,4 +189,7 @@ public sealed class MqttConfiguration
     public int Port { get; init; } = 1883;
     public string ClientId { get; init; } = "iotAPI";
     public string Topic { get; init; } = "sensors";
+    public bool UseTls { get; init; } = false;
+    public string? Username { get; init; }
+    public string? Password { get; init; }
 }

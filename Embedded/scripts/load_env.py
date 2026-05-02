@@ -37,6 +37,11 @@ def _is_numeric(value: str) -> bool:
         return False
 
 
+# Keys that must always be treated as C string literals, even if their
+# value looks numeric (e.g. a password like "8787").
+_STRING_KEYS = {"MQTT_PASS", "MQTT_USER", "WIFI_PASSWORD", "WIFI_SSID"}
+
+
 def load_env_file():
     project_dir = env.subst("$PROJECT_DIR")  # noqa: F821
     env_path = os.path.join(project_dir, ".env")
@@ -62,7 +67,7 @@ def load_env_file():
             value = value.strip()
 
             macro_name = f"{key}_VAL"
-            if _is_numeric(value):
+            if key not in _STRING_KEYS and _is_numeric(value):
                 defines.append((macro_name, value))
             else:
                 # Escape the quotes so the C string literal is correct.
