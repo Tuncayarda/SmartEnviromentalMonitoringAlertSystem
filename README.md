@@ -42,7 +42,7 @@ Gerçek zamanlı çevre izleme sistemi. ESP32 tabanlı donanım sensör verileri
 
 ## Kurulum
 
-### 1. Repoyu klonla
+### 1. Repo klonlanır
 
 ```bash
 git clone <repo-url>
@@ -53,20 +53,20 @@ cd SmartEnviromentalMonitoringAlertSystem
 
 ### 2. MQTT Broker
 
-> **Not:** Bu proje [Eclipse Mosquitto](https://mosquitto.org) broker ile geliştirildi ve test edildi. Mosquitto'nun servis olarak kurulu ve çalışır durumda olduğu varsayılır (`localhost:1883`). Farklı bir broker kullanıyorsan sonraki adımlarda ilgili host ve port bilgilerini güncelle.
+> **Not:** Bu proje [Eclipse Mosquitto](https://mosquitto.org) broker ile geliştirildi ve test edildi. Mosquitto'nun servis olarak kurulu ve çalışır durumda olduğu varsayılır (`localhost:1883`). Farklı bir broker kullanılıyorsa sonraki adımlarda ilgili host ve port bilgilerinin güncellenmesi gerekir.
 
 ---
 
 ### 3. Backend kurulumu
 
-#### 3.1 Ortam değişkenlerini ayarla
+#### 3.1 Ortam değişkenlerinin ayarlanması
 
 ```bash
 cd Backend/iotAPI
 cp .env.example .env
 ```
 
-`.env` dosyasını aç ve kendi değerlerini gir:
+`.env` dosyası açılarak aşağıdaki değerlerin doldurulması gerekir:
 
 ```env
 # PostgreSQL bağlantısı
@@ -93,14 +93,14 @@ Uygulama ilk çalıştığında EF Core, veritabanını ve tabloları otomatik o
 
 ### 4. Embedded (ESP32) kurulumu
 
-#### 4.1 Ortam değişkenlerini ayarla
+#### 4.1 Ortam değişkenlerinin ayarlanması
 
 ```bash
 cd Embedded
 cp .env.example .env
 ```
 
-`.env` dosyasını aç ve kendi değerlerini gir:
+`.env` dosyası açılarak aşağıdaki değerlerin doldurulması gerekir:
 
 ```env
 DEVICE_ID=ESP_001
@@ -114,11 +114,11 @@ MQTT_USER=
 MQTT_PASS=
 ```
 
-> `MQTT_BROKER` olarak genellikle Backend'i çalıştıran bilgisayarın yerel ağ IP'si girilir (ör. `192.168.1.x`). `localhost` ESP32'den çalışmaz.
+> `MQTT_BROKER` olarak Backend'in çalıştığı makinenin yerel ağ IP'si girilmelidir (ör. `192.168.1.x`). `localhost` ESP32'den erişilemez.
 
-#### 4.2 Firmware'i yükle
+#### 4.2 Firmware yüklenmesi
 
-> `pio` komutunun terminalde tanınması için PlatformIO'nun PATH'te olması gerekir. `pip install platformio` ile kurulum yapıldıysa otomatik eklenir. VS Code extension üzerinden kurulduysa `~\.platformio\penv\Scripts` dizinini manuel olarak PATH'e eklemen gerekebilir. VS Code PlatformIO extension kullanıyorsan terminal komutuna gerek yok — alt toolbar'daki **Upload** butonu aynı işlemi yapar.
+> `pio` komutunun terminalde tanınması için PlatformIO'nun PATH'te olması gerekir. `pip install platformio` ile kurulum yapıldıysa otomatik eklenir. VS Code extension üzerinden kurulmuşsa `~\.platformio\penv\Scripts` dizininin manuel olarak PATH'e eklenmesi gerekebilir. VS Code PlatformIO extension kullanılıyorsa terminal komutuna gerek yoktur — alt toolbar'daki **Upload** butonu aynı işlemi gerçekleştirir.
 
 ```bash
 # Bağımlılıkları yükle ve derle
@@ -150,7 +150,7 @@ pio run --target upload
 
 Sistem çalışır duruma geldikten sonra aşağıdaki adımlarla doğrulanabilir:
 
-**1. Backend'in ayakta olduğunu kontrol et**
+**1. Backend erişimi**
 
 `http://localhost:5011` adresinden dashboard'a erişilebilir.
 
