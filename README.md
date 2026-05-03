@@ -161,7 +161,15 @@ Sistem çalışır duruma geldikten sonra aşağıdaki adımlarla doğrulanabili
 
 **1. Backend erişimi**
 
-`http://localhost:5011` adresinden dashboard'a erişilebilir.
+`Backend/iotAPI` dizininde `dotnet run` komutu çalıştırılır, ardından `http://localhost:5011` adresinden dashboard'a erişilebilir.
+
+**2. ESP32'ye firmware yükleme**
+
+`Embedded` dizininde aşağıdaki komutla kod ESP32'ye yüklenir:
+
+```bash
+pio run --target upload
+```
 
 **2. API endpoint'leri**
 
@@ -177,24 +185,28 @@ Sistem çalışır duruma geldikten sonra aşağıdaki adımlarla doğrulanabili
 
 **Embedded — Veri Üretimi**
 
-ESP32 üzerinde iki FreeRTOS görevi çalışır:
+ESP32 üzerinde iki FreeRTOS görevi paralel olarak çalışır ve her biri ayrı bir çekirdeğe sabitlenmiştir:
 
-- **Core 0 — `taskSensors`:** DHT11'i 2.5 saniyede bir, PIR ve MQ135'i 100 ms'de bir okur. Okumalar paylaşımlı bir struct'a mutex korumasıyla yazılır. Eşik değerleri aşıldığında LED ve buzzer tetiklenir.
-- **Core 1 — `taskMqtt`:** Her 1 saniyede paylaşımlı struct'tan son okumayı alır ve aşağıdaki formatta JSON paketi oluşturarak MQTT broker'a publish eder:
+- **`taskSensors` (Core 1):** DHT11'i 2.5 saniyede bir, PIR ve MQ135'i 100 ms'de bir okur. Eşik değerleri aşıldığında LED ve buzzer'ı tetikler. Okunan veriler paylaşımlı bir alana mutex korumasıyla yazılır.
+- **`taskMqtt` (Core 0):** Her 1 saniyede paylaşımlı alandan son okumayı alır, JSON paketi oluşturur ve MQTT broker'a gönderir.
+
+İki görevin ayrı çekirdeklerde çalışması sayesinde veri okuma ve veri gönderme işlemleri birbirinden izole edilmiştir.
+
+Gönderilecek paketin JSON formatı:
 
 ```json
 {
-  "deviceId": "ESP_001",
+  "device_id": "ESP_001",
+  "timestamp": "2026-05-02T10:30:00Z",
   "temperature": 24.5,
   "humidity": 58.0,
-  "airQualityAdc": 310,
-  "motionDetected": false,
-  "alertActive": false,
-  "timestamp": "2026-05-02T10:30:00Z"
+  "air_adc": 310,
+  "motion": false,
+  "alert": false
 }
 ```
 
-Bağlantı koptuğunda paketler bellekte (`MQTT_BUFFER_SIZE = 30`) tutulur, bağlantı yeniden kurulunca sırayla gönderilir.
+Bağlantı kesildiğinde paketler bellekte (en fazla 30 adet) tutulur; bağlantı yeniden kurulunca sırayla gönderilir.
 
 ---
 
@@ -209,14 +221,14 @@ Bağlantı koptuğunda paketler bellekte (`MQTT_BUFFER_SIZE = 30`) tutulur, bağ
 
 **Genel Akış**
 
-DHT11, PIR ve MQ135 sensörlerinden okunan veriler ESP32 üzerinde işlenir. FreeRTOS'un dual-core yapısı sayesinde Core 0 sensör okuma ve uyarı çıkışlarını (LED/Buzzer) yönetirken Core 1 her saniye JSON paketini EMQX Cloud broker'a TLS üzerinden publish eder. Backend'deki `MqttListenerService` bu paketi alır, `MqttMessageHandler` aracılığıyla ayrıştırır ve `SensorDataRepository` ile PostgreSQL'e yazar. Dışarıya ise `/api/sensordata/latest`, `/api/sensordata/recent/{deviceId}` ve `/api/sensordata/alerts` endpoint'leri üzerinden REST API olarak sunulur.
+DHT11, PIR ve MQ135 sensörlerinden okunan veriler ESP32 üzerinde işlenir. FreeRTOS'un dual-core yapısı sayesinde **Core 1** sensör okuma ve uyarı çıkışlarını (LED/Buzzer) yönetirken **Core 0** (WiFi yığınıyla aynı çekirdek) her saniye JSON paketini EMQX Cloud broker'a TLS üzerinden publish eder. Backend'deki `MqttListenerService` bu paketi alır, `MqttMessageHandler` aracılığıyla ayrıştırır ve `SensorDataRepository` ile PostgreSQL'e yazar. Dışarıya ise `/api/sensordata/latest`, `/api/sensordata/recent/{deviceId}` ve `/api/sensordata/alerts` endpoint'leri üzerinden REST API olarak sunulur.
 
 **Tercih gerekçeleri:**
 
 | Tercih | Gerekçe |
 |--------|---------|
 | MQTT | Düşük bant genişliği, pub/sub modeli IoT için idealdir |
-| FreeRTOS dual-core | Sensör okuma ve ağ iletişimini birbirinden izole eder; gecikmeyi minimize eder |
+| FreeRTOS dual-core | Sensör okuma ve ağ iletişimi ayrı çekirdeklerde çalışır; biri diğerini yavaşlatmaz |
 | EF Core `EnsureCreatedAsync` | Geliştirme ortamında migration yönetimi olmadan hızlı schema oluşturur |
 | `.env` tabanlı config | Gizli bilgiler (şifre, SSID) kaynak koddan ve repo'dan ayrı tutulur |
 
