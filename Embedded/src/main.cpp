@@ -13,7 +13,7 @@
 static SensorReading     g_sharedReading = {};
 static SemaphoreHandle_t g_mutex         = nullptr;
 
-// Core 0 burada çalışır.
+// Core 1 burada çalışır.
 // PIR + MQ135 her 100ms'de okunur, LED/buzzer güncellenir.
 // DHT11 her 2 saniyede bir okunur.
 void taskSensors(void* pvParams) {
@@ -24,7 +24,7 @@ void taskSensors(void* pvParams) {
     while (true) {
         const TickType_t now = xTaskGetTickCount();
 
-        // DHT okuması — 2 saniyede bir
+        // DHT okuması — 2.5 saniyede bir
         if ((now - dhtTick) >= pdMS_TO_TICKS(DHT_READ_INTERVAL_MS)) {
             dhtTick = now;
             sensors_readDHT(r);
@@ -54,7 +54,7 @@ void taskSensors(void* pvParams) {
     }
 }
 
-// Core 1 burada çalışır. Her 1 saniyede son sensör verisini alıp MQTT'ye gönderir.
+// Core 0 burada çalışır. Her 1 saniyede son sensör verisini alıp MQTT'ye gönderir.
 // Geçersiz okuma varsa göndermez.
 void taskMqtt(void* pvParams) {
     TickType_t lastTick = xTaskGetTickCount();

@@ -12,7 +12,7 @@ static constexpr int  NTP_DST_SEC       = 0;
 static constexpr char NTP_SERVER[]      = "pool.ntp.org";
 
 static constexpr uint8_t PIN_PIR    = 26;
-static constexpr uint8_t PIN_MQ135  = 32;
+static constexpr uint8_t PIN_MQ135  = 34;
 static constexpr uint8_t PIN_DHT11  = 27;
 static constexpr uint8_t PIN_BUZZER = 33;
 static constexpr uint8_t PIN_LED    = 25;
